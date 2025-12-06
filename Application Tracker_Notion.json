@@ -1,0 +1,267 @@
+{
+  "name": "Application Tracker_Notion",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Job Application Tracker",
+        "formDescription": "Paste a job posting URL to automatically track it. ",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "Job Posting URL",
+              "placeholder": "https://www.brightnetwork.co.uk/graduate-jobs/gkn-aerospace/global-graduate-programme-programme-management-2026?search_id=148d4405c298be9036c4e6491f308f7f&search_position=2",
+              "requiredField": true
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6905b5e8-667b-41b4-919d-5d3811c14c5f",
+      "name": "On form submission",
+      "webhookId": "e3bda027-790e-425d-855d-4f6caa51124b"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json['Job Posting URL'] }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "header",
+              "value": "={{ { \"User-Agent\": \"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36\" } }}"
+            }
+          ]
+        },
+        "options": {
+          "proxy": ""
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "db98dfd9-bbad-40d9-a4a1-0e6a08994882",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "mode": "list",
+          "value": "models/gemini-2.5-pro"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "=You are an expert data extraction system. Your response MUST be a single, valid JSON object and nothing else. Do not add any text before the opening { or after the closing }.\n\nThe user is providing a string of *trimmed HTML source code* from a job posting.\nYour task is to mentally \"render\" this HTML and find the *main content* of the job post.\nYou MUST ignore all HTML tags, scripts, navigation menus, ads, and other irrelevant code.\n\nFrom the *main content only*, extract the following fields.\nUse \"null\" for any fields you cannot find.\n\nHTML:\n{{ $json.trimmedHtml }}\n\nReturn this JSON object:\n{\n  \"job_title\": \"The full job title\",\n  \"company\": \"The name of the company\",\n  \"job_description\": \"Provide a summary.\",\n  \"skills\": [\"A list of key skills, e.g., 'Python', 'React', 'Data Analysis'\"],\n  \"location\": \"The city and state/country, e.g., 'London, UK' or 'Remote'\",\n  \"salary\": \"e.g., '$100,000 - $120,000' or 'null'\",\n  \"contact_person\": \"The name of the hiring manager or recruiter, if listed. e.g., 'Jane Doe'\",\n  \"contact_person_email\": \"The email of the contact person, if listed. e.g., 'jane.doe@company.com'\",\n  \"additional_notes\": \"A brief 1-2 sentence summary of the job's core requirements.\",\n  \"date_applied\": \"{{ $now.toISODate() }}\",\n  \"job_link\": \"{{ $('On form submission').item.json['Job Posting URL'] }}\"\n}"
+            }
+          ]
+        },
+        "jsonOutput": true,
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.googleGemini",
+      "typeVersion": 1,
+      "position": [
+        640,
+        0
+      ],
+      "id": "fadc4b45-832d-4ab3-8bcb-00722a717797",
+      "name": "Message a model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "Zio1VvlHSNhNFdpV",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the full, messy HTML from the previous node\nconst fullHtml = $input.first().json.data;\n\n// Define a safe character limit (well under the 125k token limit)\nconst charLimit = 80000;\n\n// Trim the HTML to just the first 80,000 characters\n// The most important data is almost always at the top.\nconst trimmedHtml = fullHtml.slice(0, charLimit);\n\n// Return this trimmed HTML for the next node\nreturn { trimmedHtml: trimmedHtml };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "99b35add-9b06-40e1-8486-1ec54a6d2c9e",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "resource": "databasePage",
+        "databaseId": {
+          "__rl": true,
+          "value": "2a5f72d8-b77f-8081-8704-d427c5abf8b6",
+          "mode": "list",
+          "cachedResultName": "Job tracker",
+          "cachedResultUrl": "https://www.notion.so/2a5f72d8b77f80818704d427c5abf8b6"
+        },
+        "propertiesUi": {
+          "propertyValues": [
+            {
+              "key": "Job Title|title",
+              "title": "={{ $json.job_title }}"
+            },
+            {
+              "key": "Company|rich_text",
+              "textContent": "={{ $json.company || \"null\" }}"
+            },
+            {
+              "key": "Date Applied|date",
+              "date": "={{ $json.date_applied }}"
+            },
+            {
+              "key": "Job Description|rich_text",
+              "textContent": "={{ $json.job_description }}"
+            },
+            {
+              "key": "Job Link|url",
+              "urlValue": "={{ $json.job_link }}"
+            },
+            {
+              "key": "Skills|rich_text",
+              "textContent": "={{ $json.skills.join(', ') }}"
+            },
+            {
+              "key": "Location|rich_text",
+              "textContent": "={{ $json.location || \"null\" }}"
+            },
+            {
+              "key": "Salary Range|rich_text",
+              "textContent": "={{ $json.salary || \"null\" }}"
+            },
+            {
+              "key": "Contact Person|rich_text",
+              "textContent": "={{ $json.contact_person || \"null\" }}"
+            },
+            {
+              "key": "Contact Person Email|email",
+              "emailValue": "={{ $json.contact_person_email || \"null\" }}"
+            },
+            {
+              "key": "Notes|rich_text",
+              "textContent": "={{ $json.additional_notes }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.notion",
+      "typeVersion": 2.2,
+      "position": [
+        1200,
+        0
+      ],
+      "id": "954a767d-9a59-42d2-afac-f4e0899b4bc2",
+      "name": "Create a database page",
+      "credentials": {
+        "notionApi": {
+          "id": "d4C4Tl5vxYccSVzn",
+          "name": "Notion account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 1. Get the messy text from the Gemini node\nconst messyText = $('Message a model').item.json.content.parts[0].text;\n\n// 2. Find the first '{' in the text\nconst firstBraceIndex = messyText.indexOf('{');\n\n// 3. Find the last '}' in the text\nconst lastBraceIndex = messyText.lastIndexOf('}');\n\n// 4. Extract *only* the text between the first { and last }\nconst cleanJsonString = messyText.substring(firstBraceIndex, lastBraceIndex + 1);\n\n// 5. Parse this *clean* string into a real JSON object\nconst jsonData = JSON.parse(cleanJsonString);\n\n// 6. Return the clean JSON object for the Notion node\nreturn jsonData;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        992,
+        0
+      ],
+      "id": "2b8dd20a-c18b-4a95-a517-303a292eae05",
+      "name": "Code in JavaScript1"
+    }
+  ],
+  "pinData": {
+    "On form submission": [
+      {
+        "json": {
+          "Job Posting URL": "https://www.brightnetwork.co.uk/graduate-jobs/gkn-aerospace/global-graduate-programme-programme-management-2026?search_id=148d4405c298be9036c4e6491f308f7f&search_position=2",
+          "submittedAt": "2025-11-09T17:10:25.069-03:00",
+          "formMode": "test"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "On form submission": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Message a model",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Message a model": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Create a database page",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "09d3aa2d-ea01-46d0-ab6a-be468e80f5a4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "d528f929a132f06c5b1671eff70bb5963f9b628d451696c86f637d0a794c30db"
+  },
+  "id": "fSBTFqY9wPSiOJMH",
+  "tags": []
+}
